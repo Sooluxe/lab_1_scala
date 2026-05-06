@@ -2,28 +2,24 @@ package robot
 
 import monads.IO
 
-// позиция на сетке
 final case class Pos(x: Int, y: Int):
   override def toString: String = s"($x,$y)"
 
-// куда может пойти робот
 enum Direction(val label: String):
   case Up    extends Direction("вверх")
   case Down  extends Direction("вниз")
   case Left  extends Direction("влево")
   case Right extends Direction("вправо")
 
-// предмет на карте
 final case class Item(name: String)
 
-// неизменяемая конфигурация — это Env для Reader-монады
 final case class Config(
-    width:     Int,         // ширина поля
-    height:    Int,         // высота поля
-    obstacles: Set[Pos],    // клетки-стены
-    moveCost:  Int,         // энергия за шаг
-    pickCost:  Int,         // энергия за подбор
-    maxEnergy: Int          // максимальный заряд
+    width:     Int,
+    height:    Int,
+    obstacles: Set[Pos],
+    moveCost:  Int,
+    pickCost:  Int,
+    maxEnergy: Int
 )
 
 object Config:
@@ -36,12 +32,11 @@ object Config:
     maxEnergy = 50
   )
 
-// это S для State-монады — всё изменяемое состояние робота
 final case class RobotState(
-    pos:        Pos,                  // где сейчас
-    energy:     Int,                  // сколько энергии
-    collected:  Vector[Item],         // что собрано
-    itemsOnMap: Map[Pos, Item]        // что лежит на карте
+    pos:        Pos,
+    energy:     Int,
+    collected:  Vector[Item],
+    itemsOnMap: Map[Pos, Item]
 )
 
 object RobotState:
@@ -56,19 +51,14 @@ object RobotState:
     )
   )
 
-// псевдоним для лога Writer-монады
 type Log = Vector[String]
 
-// абстракция пункта меню — знает только как себя показать
 trait MenuOption:
   def show: String
 
-// абстракция взаимодействия с пользователем через IO.
-// handleUserAnswer — обработать ввод. userInteractionLoop — полный цикл.
 trait UserInteraction:
   def handleUserAnswer(answer: String): IO[Unit]
   def userInteractionLoop: IO[Unit]
 
-// extension-методы для Item — добавлены снаружи, без наследования
 extension (item: Item)
   def summary: String = s"'${item.name}'"

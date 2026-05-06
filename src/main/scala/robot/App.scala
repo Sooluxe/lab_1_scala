@@ -5,22 +5,14 @@ import monads.Monoid.given
 import monads.IO.given
 import robot.Direction.*
 
-// UserInteraction — весь main теперь живёт здесь как дерево MenuTreeNode.
-// никаких case "1" / case "2" — меню масштабируется добавлением узлов.
 object App extends UserInteraction:
 
   private val readLine: IO[String]       = IO.readLine
   private def print(s: String): IO[Unit] = IO.println(s)
 
-  // ============================================================================
-  // вспомогательные IO
-  // ============================================================================
-
-  // печатает Vector[String] построчно — журнал из Writer-цепочки
   private def printLog(log: Vector[String]): IO[Unit] =
     IO(() => log.foreach(println))
 
-  // карта поля: R=робот, X=стена, *=предмет
   private def printMap(cfg: Config, st: RobotState): IO[Unit] =
     IO(() =>
       println("\nКарта (R=робот, X=стена, *=предмет):")
@@ -35,11 +27,6 @@ object App extends UserInteraction:
         println(s"  $row")
     )
 
-  // ============================================================================
-  // flows: каждый — IO[Unit], связывающий Reader + State + Writer
-  // ============================================================================
-
-  // шаг в сторону dir. Reader проверяет, можно ли; State обновляет; Writer пишет лог.
   private def moveFlow(dir: Direction, cfg: Config, stRef: StRef): IO[Unit] =
     val st   = stRef.get
     val to   = ReaderOps.nextPos(st.pos, dir)
@@ -62,7 +49,6 @@ object App extends UserInteraction:
         yield ()
       printLog(log).map(_ => stRef.set(st1))
 
-  // подбор предмета на текущей клетке
   private def pickFlow(cfg: Config, stRef: StRef): IO[Unit] =
     val st   = stRef.get
     val cost = ReaderOps.energyCost("pick").run(cfg)
@@ -86,7 +72,6 @@ object App extends UserInteraction:
         case None =>
           IO.pure(())
 
-  // сброс последнего собранного предмета
   private def dropFlow(stRef: StRef): IO[Unit] =
     val st             = stRef.get
     val (st1, dropped) = StateOps.dropItem.run(st)
@@ -98,14 +83,12 @@ object App extends UserInteraction:
         val Writer(log, _) = WriterOps.logDropFail
         printLog(log)
 
-  // зарядка до максимума из конфига
   private def rechargeFlow(cfg: Config, stRef: StRef): IO[Unit] =
     val st            = stRef.get
     val (st1, gained) = StateOps.recharge(cfg.maxEnergy).run(st)
     val Writer(log, _) = WriterOps.logRecharge(gained, cfg.maxEnergy)
     printLog(log).map(_ => stRef.set(st1))
 
-  // показать карту + текстовый статус
   private def showStateFlow(cfg: Config, stRef: StRef): IO[Unit] =
     val st = stRef.get
     for
@@ -119,7 +102,6 @@ object App extends UserInteraction:
       )
     yield ()
 
-  // финальная сводка перед выходом
   private def exitSummary(stRef: StRef): IO[Unit] =
     val st = stRef.get
     val items =
@@ -127,23 +109,14 @@ object App extends UserInteraction:
       else st.collected.map(_.name).mkString(", ")
     print(s"\nИтог: позиция=${st.pos}, энергия=${st.energy}, собрано: $items. До свидания!")
 
-  // ============================================================================
-  // мутабельная ссылка на состояние — чтобы все MenuLeaf-замыкания видели один стейт
-  // ============================================================================
-
-  // без неё каждый MenuLeaf увидел бы только тот снимок состояния, что был в момент
-  // построения дерева
   private final class StRef(private var state: RobotState):
     def get: RobotState              = state
     def set(s: RobotState): Unit     = state = s
 
-  // заголовок-статусбар — пересчитывается каждую итерацию из stRef
   private def statusTitle(stRef: StRef): String =
     val st = stRef.get
     s"Робот: pos=${st.pos} | энергия=${st.energy} | собрано=${st.collected.size}"
 
-  // дерево меню. добавить пункт = вписать MenuLeaf в children.
-  // никакого case "N" — нумерацией занимается MenuTreeNode.
   private def buildMenu(cfg: Config, stRef: StRef): MenuTreeNode =
     val movement = MenuTreeNode(
       title = "Движение",
@@ -171,17 +144,10 @@ object App extends UserInteraction:
       )
     )
 
-  // ============================================================================
-  // UserInteraction: handleUserAnswer и userInteractionLoop
-  // ============================================================================
-
-  // handleUserAnswer делегирует свежепостроенному дереву меню
   def handleUserAnswer(answer: String): IO[Unit] =
     val stRef = StRef(RobotState.initial)
     buildMenu(Config.default, stRef).handleUserAnswer(answer)
 
-  // цикл с обновляемым заголовком: каждый круг пересобираем меню,
-  // чтобы статусбар отражал свежее состояние из stRef.
   def userInteractionLoop: IO[Unit] =
     val stRef = StRef(RobotState.initial)
     val cfg   = Config.default
@@ -212,7 +178,6 @@ object App extends UserInteraction:
       yield ()
     loop
 
-  // описание программы. реально что-то произойдёт только при unsafeRun().
   val program: IO[Unit] =
     for
       _ <- print("=== Робот на сетке (вариант 3) ===")
